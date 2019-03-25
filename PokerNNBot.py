@@ -5,12 +5,33 @@ import random as rand
 import numpy as np
 import pprint
 
+def safe_exp(y):
+    try:
+        return np.exp(y)
+    except FloatingPointError:
+        lst = []
+        for i in y:
+            try:
+                v = np.exp(i)
+                lst.append(v)
+            except FloatingPointError:
+                lst.append(0)
+        return np.array(lst)
+
 def softmax(x):
     """Compute softmax values for each sets of scores in x."""
-    return np.exp(x) / (np.sum(np.exp(x), axis=0) + 1e-9)
+    return safe_exp(x) / (np.sum(safe_exp(x), axis=0) + 1e-9)
 
 def backward_softmax(x):
-    return x*(1-x)
+    """
+    Send softmazx gradient backwards. IF there are errors in computation, don't update
+    :param x:
+    :return:
+    """
+    try:
+        return x*(1-x)
+    except FloatingPointError:
+        return 0
 
 def random_choice(dist):
     rnd = rand.random()
@@ -34,12 +55,12 @@ class Neuron:
         inp = np.array([pot/2000, bb_pos, amount/2000, hand_strength])
         out = np.matmul(self.weights,inp) + self.bias
         dist = softmax(out[0])
-        print(dist)
         choice = random_choice(dist)
         self.history.append((choice, inp))
         return ["raise", "fold", "call"][choice]
 
-    def backward(self, reward, lr=0.1):
+    def backward(self, reward, lr=0.01):
+        np.seterr(over="raise")
         error_b = np.zeros(shape=(1, 3))
         error_w = np.zeros(shape=(3, 4))
         for choice, inp in self.history:
@@ -55,8 +76,8 @@ class Neuron:
                 error = arr - dist
             res = np.multiply(backward_softmax(out), error)
 
-            error_b -= res
-            error_w -= np.outer(res, np.array(inp))
+            error_b += res
+            error_w += np.outer(res, np.array(inp))
         if len(self.history) == 0:
             return
         self.weights += error_w*lr/len(self.history)
