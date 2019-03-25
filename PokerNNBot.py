@@ -1,16 +1,16 @@
 from pypokerengine.players import BasePokerPlayer
 from effective_hand_strength import HandStrengthEval
+from decimal import Decimal
 import random as rand
 import numpy as np
 import pprint
 
 def softmax(x):
     """Compute softmax values for each sets of scores in x."""
-    return np.exp(x) / np.sum(np.exp(x), axis=0)
+    return np.exp(x) / (np.sum(np.exp(x), axis=0) + 1e-9)
 
 def backward_softmax(x):
-    y = np.sum(np.exp(x))*np.array([1,1,1]) - np.exp(x)
-    return np.exp(x)*y/ (np.sum(np.exp(x), axis=0) + 1e-9)
+    return x*(1-x)
 
 def random_choice(dist):
     rnd = rand.random()
@@ -34,6 +34,7 @@ class Neuron:
         inp = np.array([pot/2000, bb_pos, amount/2000, hand_strength])
         out = np.matmul(self.weights,inp) + self.bias
         dist = softmax(out[0])
+        print(dist)
         choice = random_choice(dist)
         self.history.append((choice, inp))
         return ["raise", "fold", "call"][choice]
@@ -52,9 +53,12 @@ class Neuron:
                 error = dist - (ones-arr)/2
             else:
                 error = arr - dist
-            res = backward_softmax(out)*error
-            error_b += res
-            error_w += np.outer(res, np.array(inp))
+            res = np.multiply(backward_softmax(out), error)
+
+            error_b -= res
+            error_w -= np.outer(res, np.array(inp))
+        if len(self.history) == 0:
+            return
         self.weights += error_w*lr/len(self.history)
         self.bias += error_b*lr/len(self.history)
         self.history = []
